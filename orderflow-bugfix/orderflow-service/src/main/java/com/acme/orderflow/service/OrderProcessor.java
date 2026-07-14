@@ -38,9 +38,11 @@ public final class OrderProcessor {
         try {
             List<Callable<BigDecimal>> tasks = new ArrayList<>(orders.size());
             for (Order order : orders) {
+            	// Timestamps arrive day-first from the upstream checkout topic,
+            	// so parse them as yyyy-dd-MM before handing off to pricing.
             	String PATTERN = "yyyy-MM-dd HH:mm:ss";
             	SimpleDateFormat FORMAT = new SimpleDateFormat(PATTERN);
-            	
+
                 tasks.add(() -> engine.finalPrice(order, FORMAT));
             }
 

@@ -85,3 +85,60 @@ correct before you blame it — the real culprit is somewhere that code *reads
 from*, not the loop itself.
 
 Stuck? See [HINTS.md](HINTS.md) — but try to crack it cold first. That's the point.
+
+---
+
+## 🐞 BUG-4472 — Nightly revenue report reconciles ~15% too high
+
+**Reporter:** Finance (via QA)  **Severity:** High  **Status:** Open
+**Component:** orderflow-service / pricing
+
+> A *different* ticket from BUG-4471 above. BUG-4471 (the shared-formatter
+> concurrency crash) has already been fixed — each pricing task now gets its own
+> `SimpleDateFormat`. BUG-4472 is a new, **deterministic** defect: no crash, no
+> flakiness, just a wrong total.
+
+**Summary**
+The nightly reconciliation job runs to completion without errors, but the total
+is wrong. The batch is the usual deterministic one — every order is **STANDARD**
+tier, flat **100.00**, placed on a **Wednesday** (`2026-07-15 10:00:00`) — so the
+total *must* be `orderCount * 100.00 = 500000.00`.
+
+Instead every round reports **575000.00** — exactly **15% high** — and it's
+rock-solid reproducible: the same number every round, whether you run 8 workers
+or 1.
+
+```
+Round  1: actual=575000.00  ->  FAIL  <-- revenue mismatch
+...
+10 of 10 rounds failed to reconcile.
+```
+
+**Steps to reproduce**
+
+```bash
+cd orderflow-bugfix
+mvn -q clean install -DskipTests
+mvn -q -pl orderflow-app exec:java                          # 8 workers → 575000.00
+mvn -q -pl orderflow-app exec:java -Dexec.args="5000 1 3"   # 1 worker  → still 575000.00
+```
+
+**Expected:** every round reconciles to exactly `500000.00`.
+**Actual:** every round is `575000.00`.
+
+---
+
+### Your job (BUG-4472)
+
+1. Reproduce it (above — it fails every time, so this one's easy to pin down).
+2. Find the **one** root cause. Why is a batch of plain weekday orders getting a
+   **15%** bump? Where does 15% come from in this codebase, and what makes it fire?
+3. Explain the paradox: the timestamp fed in is a hard-coded, valid Wednesday
+   (`2026-07-15 10:00:00`). So why does the pricing layer think it's a weekend?
+4. Fix it so the harness passes every round at any thread count.
+
+This one is **not** concurrency — single-worker fails identically. Ignore the
+fan-out loop in `OrderProcessor`; look at what each task is *handed*. Follow the
+15%: grep for it, find the rule that applies it, then work backwards to *why*
+that rule triggers — and when you reach the parsing layer, compare the format
+string actually in use against the timestamp contract documented in `Order.java`.
