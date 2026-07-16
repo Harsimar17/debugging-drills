@@ -24,13 +24,15 @@ public final class AccountRepository {
      * first reference.
      */
     public Account getOrCreate(AccountId id, Currency currency) {
-        Account existing = accounts.get(id);
-        if (existing != null) {
-            return existing;
-        }
-        Account created = new Account(id, currency);
-        accounts.put(id, created);
-        return created;
+    	 Account account = new Account(id, currency);
+         Account insVal = accounts.putIfAbsent(id, account);
+         
+         if(insVal != null) 
+         {
+        	 return insVal;
+         }
+         
+         return account;
     }
 
     public Account get(AccountId id) {
