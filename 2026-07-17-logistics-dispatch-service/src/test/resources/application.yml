@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:dispatch-test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+dispatch:
+  retry:
+    fixed-delay-ms: 10000
+    max-attempts: 5
+  carrier:
+    simulated-latency-min-ms: 5
+    simulated-latency-max-ms: 15
+  idempotency:
+    retention-minutes: 30
+
+logging:
+  level:
+    root: WARN
