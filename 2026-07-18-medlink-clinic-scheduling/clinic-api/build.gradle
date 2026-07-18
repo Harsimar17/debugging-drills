@@ -1,0 +1,7 @@
+apply plugin: 'java-library'
+
+dependencies {
+    api project(':clinic-service')
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+}

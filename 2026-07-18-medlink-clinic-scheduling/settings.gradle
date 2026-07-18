@@ -1,0 +1,9 @@
+rootProject.name = 'medlink-clinic-scheduling'
+
+include 'clinic-common'
+include 'clinic-domain'
+include 'clinic-repository'
+include 'clinic-service'
+include 'clinic-scheduler'
+include 'clinic-api'
+include 'clinic-app'
