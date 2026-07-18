@@ -71,12 +71,13 @@ public class AppointmentBookingService {
                 .orElseThrow(() -> new SlotUnavailableException(
                         "Slot " + request.getSlotId() + " is no longer available"));
 
-        // Reserve the slot in the availability cache immediately. This keeps the
-        // provider's calendar responsive under load: the slot disappears from
-        // the cached list for every subsequent viewer/booker right away, rather
-        // than waiting on a fresh DB round trip once the cache entry expires.
-        availableSlots.remove(chosenSlot);
-
+        int updated = timeSlotRepository.tryReserve(request.getSlotId());
+        
+        if (updated == 0) 
+        {
+            throw new SlotUnavailableException("Slot " + request.getSlotId() + " is no longer available");
+        }
+        
         chosenSlot.setStatus(SlotStatus.BOOKED);
         timeSlotRepository.save(chosenSlot);
 
