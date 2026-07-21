@@ -14,13 +14,16 @@ public class CalculatorUtil {
 	@Autowired
 	 private PointsLedgerEntryRepository ledgerRepository;
 
-	public Long calculateTotalBalance(Long memberId) 
+	public Long calculateTotalBalance(Long memberId)
 	{
-		List<PointsLedgerEntry> fromMemberAllLedger = ledgerRepository.findByMemberId(memberId);
+		return calculateTotalBalance(ledgerRepository.findByMemberId(memberId));
+	}
 
+	public Long calculateTotalBalance(List<PointsLedgerEntry> entries)
+	{
 		Long balance = 0L;
 
-		for (PointsLedgerEntry entry : fromMemberAllLedger)
+		for (PointsLedgerEntry entry : entries)
 		{
 			balance += entry.getPoints();
 		}

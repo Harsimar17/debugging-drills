@@ -3,9 +3,12 @@ package com.vantage.loyalty.service;
 import com.vantage.loyalty.domain.Member;
 import com.vantage.loyalty.domain.PointsLedgerEntry;
 import com.vantage.loyalty.domain.enums.LedgerEntryType;
+import com.vantage.loyalty.domain.enums.MemberStatus;
 import com.vantage.loyalty.dto.TransferPointsRequest;
 import com.vantage.loyalty.repository.MemberRepository;
 import com.vantage.loyalty.repository.PointsLedgerEntryRepository;
+import com.vantage.loyalty.util.CalculatorUtil;
+
 import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
@@ -28,6 +31,9 @@ public class TransferService {
 	MemberRepository memberRepo;
 	
 	@Autowired
+	CalculatorUtil util;
+	
+	@Autowired
 	PointsLedgerEntryRepository pointsLedgerEntryRepo;
 
 	@Transactional
@@ -39,14 +45,24 @@ public class TransferService {
 		Member toMember = memberRepo.findByMemberNumber(request.getToMemberNumber())
 		        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "To member not found"));
 
+    	if(fromMember.getId() == toMember.getId()) 
+    	{
+    		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot transfer to yourself");
+    	}
+
+    	if(fromMember.getStatus() != MemberStatus.ACTIVE) 
+    	{
+    		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sending recipient is inactive.");
+    	}
+    	
+    	if(toMember.getStatus() != MemberStatus.ACTIVE) 
+    	{
+    		throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receiving recipient is inactive.");
+    	}
+    	
     	List<PointsLedgerEntry> fromMemberAllLedger = pointsLedgerEntryRepo.findByMemberId(fromMember.getId());
-
-    	Long fromMemBal = 0L;
-
-    	for(PointsLedgerEntry entry : fromMemberAllLedger) 
-		{
-    		fromMemBal += entry.getPoints();
-		}
+    	
+    	Long fromMemBal = util.calculateTotalBalance(fromMemberId);
 
     	if (fromMemBal < request.getPoints())
     	{
