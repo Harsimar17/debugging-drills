@@ -14,13 +14,17 @@ import com.vantage.loyalty.repository.MemberRepository;
 import com.vantage.loyalty.repository.PointsLedgerEntryRepository;
 import com.vantage.loyalty.repository.RedemptionRepository;
 import com.vantage.loyalty.repository.RewardCatalogItemRepository;
+import com.vantage.loyalty.util.CalculatorUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 public class RedemptionService {
@@ -32,6 +36,9 @@ public class RedemptionService {
     private final RewardCatalogItemRepository catalogRepository;
     private final RedemptionRepository redemptionRepository;
     private final RewardCalculator calculator;
+    
+    @Autowired
+    private CalculatorUtil util;
 
     public RedemptionService(MemberRepository memberRepository,
                              PointsLedgerEntryRepository ledgerRepository,
@@ -58,7 +65,10 @@ public class RedemptionService {
         }
 
         long cost = calculator.pointsForCatalogCost(item.getPointsCost());
-        long balance = ledgerRepository.currentBalance(memberId, LedgerEntryType.EARN);
+        
+
+    	Long balance = util.calculateTotalBalance(memberId);
+
         log.info("Redeem request member={} sku={} cost={} balance={}", memberId, item.getSku(), cost, balance);
 
         if (balance < cost) {
@@ -69,9 +79,9 @@ public class RedemptionService {
         BigDecimal cashValue = calculator.pointsToCurrency(cost);
 
         LocalDateTime now = LocalDateTime.now();
-        PointsLedgerEntry debit = new PointsLedgerEntry(memberId, LedgerEntryType.REDEEM, balance-cost,
+        PointsLedgerEntry debit = new PointsLedgerEntry(memberId, LedgerEntryType.REDEEM, -cost,
                 "Redeemed " + item.getName(), item.getSku(), now, null);
-        PointsLedgerEntry freshObj = ledgerRepository.saveAndFlush(debit);
+        ledgerRepository.saveAndFlush(debit);
 
         Redemption redemption = redemptionRepository.save(
                 new Redemption(memberId, item.getSku(), cost, cashValue));
@@ -81,7 +91,7 @@ public class RedemptionService {
         result.setSku(item.getSku());
         result.setPointsSpent(cost);
         result.setCashValue(cashValue);
-        result.setRemainingBalance(ledgerRepository.currentBalance(memberId, LedgerEntryType.REDEEM));
+        result.setRemainingBalance(util.calculateTotalBalance(memberId));
         result.setRedeemedAt(redemption.getRedeemedAt());
         log.info("Redemption {} completed for member {}", redemption.getId(), memberId);
         return result;

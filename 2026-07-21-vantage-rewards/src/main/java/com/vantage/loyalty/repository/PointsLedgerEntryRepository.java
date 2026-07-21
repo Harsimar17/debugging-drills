@@ -19,16 +19,6 @@ public interface PointsLedgerEntryRepository extends JpaRepository<PointsLedgerE
                                                            LedgerEntryType entryType);
 
     /**
-     * Current available points balance for a member: the sum of active,
-     * unexpired points the member can still spend.
-     */
-    @Query("SELECT COALESCE(SUM(e.points), 0) FROM PointsLedgerEntry e "
-            + "WHERE e.memberId = :memberId "
-            + "AND e.expired = false "
-            + "AND e.entryType = :type")
-    long currentBalance(@Param("memberId") Long memberId, @Param("type")LedgerEntryType type);
-
-    /**
      * Unexpired EARN entries whose validity window has elapsed and which should
      * therefore be swept by the nightly expiry job.
      */
@@ -38,4 +28,6 @@ public interface PointsLedgerEntryRepository extends JpaRepository<PointsLedgerE
             + "AND e.expiresAt IS NOT NULL "
             + "AND e.expiresAt < :cutoff")
     List<PointsLedgerEntry> findExpirable(@Param("cutoff") LocalDateTime cutoff);
+    
+    List<PointsLedgerEntry> findByMemberId(Long memberId);
 }

@@ -30,7 +30,15 @@ import java.util.Objects;
         })
 public class PointsLedgerEntry {
 
-    @Id
+    public void setPoints(long points) {
+		this.points = points;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
+	}
+
+	@Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 

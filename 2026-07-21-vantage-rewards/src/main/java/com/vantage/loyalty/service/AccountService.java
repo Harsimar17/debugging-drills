@@ -9,6 +9,9 @@ import com.vantage.loyalty.exception.ResourceNotFoundException;
 import com.vantage.loyalty.mapper.LedgerMapper;
 import com.vantage.loyalty.repository.MemberRepository;
 import com.vantage.loyalty.repository.PointsLedgerEntryRepository;
+import com.vantage.loyalty.util.CalculatorUtil;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -21,6 +24,9 @@ public class AccountService {
     private final PointsLedgerEntryRepository ledgerRepository;
     private final RewardCalculator calculator;
     private final LedgerMapper ledgerMapper;
+    
+    @Autowired
+    private CalculatorUtil util;
 
     public AccountService(MemberRepository memberRepository,
                           PointsLedgerEntryRepository ledgerRepository,
@@ -37,7 +43,7 @@ public class AccountService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member not found: " + memberId));
 
-        long balance = ledgerRepository.currentBalance(memberId, LedgerEntryType.EARN);
+        long balance = util.calculateTotalBalance(memberId);
 
         AccountSummaryDto dto = new AccountSummaryDto();
         dto.setMemberId(member.getId());

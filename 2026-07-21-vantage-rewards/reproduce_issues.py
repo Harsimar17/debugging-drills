@@ -102,15 +102,65 @@ def summary(member_id):
     return request("GET", f"/api/members/{member_id}/account/summary")
 
 
+def enroll_full(tier, name="Repro Tester"):
+    """Enroll and return the full member dict (id + memberNumber)."""
+    status, body = request("POST", "/api/members", {
+        "fullName": name,
+        "email": f"repro{_next_seq()}@example.com",
+        "tier": tier,
+    })
+    if status != 201:
+        raise RuntimeError(f"enroll({tier}) failed: {status} {body}")
+    return body
+
+
+def transfer(from_member_id, to_member_number, points, note="Gift"):
+    return request("POST", f"/api/members/{from_member_id}/transfers", {
+        "toMemberNumber": to_member_number,
+        "points": points,
+        "note": note,
+    })
+
+
+def ledger(member_id):
+    status, body = request("GET", f"/api/members/{member_id}/account/ledger?size=200")
+    if isinstance(body, dict) and "content" in body:
+        return body["content"]
+    return []
+
+
+def adjustments(member_id):
+    return [e for e in ledger(member_id) if e.get("entryType") == "ADJUSTMENT"]
+
+
 # --------------------------------------------------------------------------- #
 # Pretty output
 # --------------------------------------------------------------------------- #
 PASS = "\033[92mOK (as expected)\033[0m"
 BUG = "\033[91m🐛 BUG REPRODUCED\033[0m"
 
+MET = "\033[92mMET\033[0m"
+NOT_MET = "\033[91mNOT MET\033[0m"
+MANUAL = "\033[93mMANUAL\033[0m"
+
 
 def verdict(reproduced):
     return BUG if reproduced else PASS
+
+
+def req_verdict(met):
+    if met is None:
+        return MANUAL
+    return MET if met else NOT_MET
+
+
+def safe(fn):
+    """Run a criterion check, converting any unexpected error into NOT MET."""
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001 - report, don't crash the suite
+        print(f"  (check raised {type(e).__name__}: {e})")
+        return False
 
 
 def header(ticket, title):
@@ -204,6 +254,99 @@ def repro_659():
 
 
 # --------------------------------------------------------------------------- #
+# New requirement — VANTAGE-REQ-118: peer-to-peer points transfer
+# (acceptance checks; every criterion is NOT MET until the feature is built)
+# --------------------------------------------------------------------------- #
+def check_transfer_requirement():
+    header("VANTAGE-REQ-118", "Peer-to-peer points transfer (new requirement)")
+
+    def ac_debit_credit():
+        print("  [AC-2/3] atomic debit + credit as ADJUSTMENT entries")
+        sender = enroll_full("STANDARD", "Sender A")
+        recipient = enroll_full("STANDARD", "Recipient A")
+        earn(sender["id"], 1000.00)
+        status, body = transfer(sender["id"], recipient["memberNumber"], 400)
+        s_adj, r_adj = adjustments(sender["id"]), adjustments(recipient["id"])
+        print(f"    transfer status={status}; sender ADJ={s_adj}; recipient ADJ={r_adj}")
+        return (200 <= status < 300
+                and any(e.get("points") == -400 for e in s_adj)
+                and any(e.get("points") == 400 for e in r_adj))
+
+    def ac_reference():
+        print("  [AC-3] each entry references the counterparty")
+        sender = enroll_full("STANDARD", "Sender B")
+        recipient = enroll_full("STANDARD", "Recipient B")
+        earn(sender["id"], 800.00)
+        status, _ = transfer(sender["id"], recipient["memberNumber"], 250)
+        s_adj, r_adj = adjustments(sender["id"]), adjustments(recipient["id"])
+        if not s_adj or not r_adj:
+            print(f"    no ADJUSTMENT entries produced (status={status})")
+            return False
+        s_note, r_note = s_adj[0].get("description") or "", r_adj[0].get("description") or ""
+        print(f"    sender note={s_note!r}; recipient note={r_note!r}")
+        return (recipient["memberNumber"] in s_note or recipient["fullName"] in s_note) and \
+               (sender["memberNumber"] in r_note or sender["fullName"] in r_note)
+
+    def ac_inherit_validity():
+        print("  [AC-4] transferred points inherit sender's remaining validity")
+        sender = enroll_full("STANDARD", "Sender C")
+        recipient = enroll_full("STANDARD", "Recipient C")
+        _, earned = earn(sender["id"], 500.00)
+        sender_expiry = earned[0].get("expiresAt") if isinstance(earned, list) and earned else None
+        status, _ = transfer(sender["id"], recipient["memberNumber"], 500)
+        r_adj = adjustments(recipient["id"])
+        credited_expiry = r_adj[0].get("expiresAt") if r_adj else None
+        print(f"    sender EARN expiry={sender_expiry}; credited expiry={credited_expiry} (status={status})")
+        return credited_expiry is not None and credited_expiry == sender_expiry
+
+    def ac_insufficient():
+        print("  [AC-1] reject insufficient points, no side effects")
+        sender = enroll_full("STANDARD", "Sender D")
+        recipient = enroll_full("STANDARD", "Recipient D")
+        earn(sender["id"], 100.00)
+        status, body = transfer(sender["id"], recipient["memberNumber"], 500)
+        print(f"    transfer status={status} body={body}")
+        return status == 409 and not adjustments(sender["id"]) and not adjustments(recipient["id"])
+
+    def ac_unknown_recipient():
+        print("  [AC-5] reject unknown recipient")
+        sender = enroll_full("STANDARD", "Sender E")
+        earn(sender["id"], 1000.00)
+        status, body = transfer(sender["id"], "VG000000", 100)
+        print(f"    transfer to VG000000 status={status} body={body}")
+        return status == 404
+
+    def ac_self_transfer():
+        print("  [AC-5] reject self-transfer")
+        sender = enroll_full("STANDARD", "Sender F")
+        earn(sender["id"], 1000.00)
+        status, body = transfer(sender["id"], sender["memberNumber"], 100)
+        print(f"    transfer to self status={status} body={body}")
+        return 400 <= status < 500 and not adjustments(sender["id"])
+
+    checks = {
+        "AC-1 insufficient points": safe(ac_insufficient),
+        "AC-2/3 debit + credit":    safe(ac_debit_credit),
+        "AC-3 counterparty ref":    safe(ac_reference),
+        "AC-4 validity inherited":  safe(ac_inherit_validity),
+        "AC-5 unknown recipient":   safe(ac_unknown_recipient),
+        "AC-5 self-transfer":       safe(ac_self_transfer),
+    }
+    print("\n  Criteria:")
+    for name, met in checks.items():
+        print(f"    {name:<26}: {req_verdict(met)}")
+    print("    AC-5 inactive recipient   : " + req_verdict(None)
+          + " (no API to suspend a member; see JUnit TransferServiceTest)")
+
+    testable = list(checks.values())
+    met_count = sum(1 for v in testable if v)
+    all_met = met_count == len(testable)
+    print(f"\n  RESULT:   {met_count}/{len(testable)} criteria met -> "
+          + ("\033[92mFEATURE COMPLETE\033[0m" if all_met else "\033[91mNOT IMPLEMENTED YET\033[0m"))
+    return all_met
+
+
+# --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
 def main():
@@ -225,15 +368,21 @@ def main():
         "LOYAL-659": repro_659(),
     }
 
+    requirement_met = check_transfer_requirement()
+
     print("\n" + "=" * 74)
     print("  SUMMARY")
     print("=" * 74)
+    print("  Production defects:")
     for ticket, res in results.items():
         if res is None:
             label = "\033[93mMANUAL\033[0m"
         else:
             label = BUG if res else PASS
-        print(f"  {ticket}: {label}")
+        print(f"    {ticket}: {label}")
+    print("  New requirement:")
+    print(f"    VANTAGE-REQ-118 (points transfer): "
+          + ("\033[92mFEATURE COMPLETE\033[0m" if requirement_met else "\033[91mNOT IMPLEMENTED YET\033[0m"))
     print()
 
 
