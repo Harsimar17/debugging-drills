@@ -18,7 +18,7 @@ public class RefundController {
     }
 
     @PostMapping
-    public RefundResult refund(@PathVariable String recordLocator) {
+    public RefundResult refund(@PathVariable String recordLocator) throws Exception {
         return refundService.refund(recordLocator);
     }
 }

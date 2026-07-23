@@ -98,8 +98,14 @@ public class Passenger {
             return false;
         }
         Passenger that = (Passenger) o;
-        return Objects.equals(firstName, that.firstName)
-                && Objects.equals(lastName, that.lastName);
+        return Objects.equals(
+                booking != null ? booking.getId() : null,
+                that.booking != null ? that.booking.getId() : null)
+            && Objects.equals(firstName, that.firstName)
+            && Objects.equals(lastName, that.lastName)
+            && Objects.equals(dateOfBirth, that.dateOfBirth)
+            && passengerType == that.passengerType
+            && Objects.equals(seatNumber, that.seatNumber);
     }
 
     @Override

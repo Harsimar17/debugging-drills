@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 /**
@@ -41,7 +42,7 @@ public class FareCalculationService {
     }
 
     public FareQuote quote(Flight flight, CabinClass cabin, List<PassengerType> passengers) {
-        FareQuote cached = fareCache.get(flight.getId());
+        FareQuote cached = fareCache.get(flight.getId() + cabin.toString() + passengers);
         if (cached != null) {
             log.debug("Fare cache hit for flight {}", flight.getId());
             return cached;
@@ -62,13 +63,13 @@ public class FareCalculationService {
         BigDecimal tax = MoneyUtil.percentage(base, TAX_RATE_PERCENT);
 
         // The flat booking service fee is shared evenly across the party.
-        BigDecimal perPassengerFee = BOOKING_SERVICE_FEE.divide(BigDecimal.valueOf(passengers.size()));
+        BigDecimal perPassengerFee = BOOKING_SERVICE_FEE.divide(BigDecimal.valueOf(passengers.size()),  RoundingMode.HALF_UP);
         BigDecimal fee = MoneyUtil.normalize(perPassengerFee.multiply(BigDecimal.valueOf(passengers.size())));
 
         BigDecimal total = MoneyUtil.normalize(base.add(tax).add(fee));
 
         FareQuote quote = new FareQuote(CURRENCY, base, tax, fee, total);
-        fareCache.put(flight.getId(), quote);
+        fareCache.put(flight.getId() + cabin.toString() + passengers, quote);
         log.info("Priced flight {} cabin {} for {} passenger(s): total {}",
                 flight.getId(), cabin, passengers.size(), total);
         return quote;

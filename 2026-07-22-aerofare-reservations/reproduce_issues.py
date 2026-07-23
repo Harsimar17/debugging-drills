@@ -245,11 +245,27 @@ def check_refund_requirement():
         print(f"    BUSINESS availableSeats before={before}, after refund={after}")
         return before is not None and after is not None and after == before
 
+    def ac_already_refunded():
+        print("  [AC-5] refunding an already-refunded booking -> 409 (idempotent, no double refund)")
+        _, booking = create_booking("FL500", "BUSINESS", [pax("Al", "Ready")])
+        pnr = booking.get("recordLocator") if isinstance(booking, dict) else None
+        if not pnr:
+            print(f"    could not create booking: {booking}")
+            return False
+        first_status, _ = refund(pnr)
+        second_status, second_body = refund(pnr)
+        booking_status, booking_view = request("GET", f"/api/bookings/{pnr}")
+        now_status = booking_view.get("status") if isinstance(booking_view, dict) else None
+        print(f"    1st refund={first_status}, 2nd refund={second_status}, booking status now={now_status}")
+        print(f"    EXPECTED: 1st=200, 2nd=409, booking marked REFUNDED.")
+        return first_status == 200 and second_status == 409 and now_status == "REFUNDED"
+
     checks = {
         "AC-1 unknown PNR 404": safe(ac_unknown),
         "AC-2 non-refundable 409": safe(ac_non_refundable),
         "AC-3 refund math + status": safe(ac_refundable_math),
         "AC-4 seats released": safe(ac_release_seats),
+        "AC-5 already-refunded 409": safe(ac_already_refunded),
     }
     print("\n  Criteria:")
     for name, met in checks.items():

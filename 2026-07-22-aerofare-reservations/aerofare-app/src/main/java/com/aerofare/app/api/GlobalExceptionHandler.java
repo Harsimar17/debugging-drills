@@ -3,6 +3,7 @@ package com.aerofare.app.api;
 import com.aerofare.app.dto.ApiError;
 import com.aerofare.common.exception.BookingException;
 import com.aerofare.common.exception.FareException;
+import com.aerofare.common.exception.RefundNotAllowedException;
 import com.aerofare.common.exception.ResourceNotFoundException;
 import com.aerofare.common.exception.SeatUnavailableException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,5 +58,10 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ApiError> build(HttpStatus status, String message, HttpServletRequest req) {
         ApiError error = new ApiError(status.value(), status.getReasonPhrase(), message, req.getRequestURI());
         return ResponseEntity.status(status).body(error);
+    }
+    
+    @ExceptionHandler(RefundNotAllowedException.class)
+    public ResponseEntity<ApiError> handleRefundNotAllowed(RefundNotAllowedException ex, HttpServletRequest req) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), req);
     }
 }

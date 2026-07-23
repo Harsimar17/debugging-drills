@@ -25,7 +25,7 @@ public interface FlightRepository extends JpaRepository<Flight, Long> {
             + "AND f.departureTime >= :start "
             + "AND f.departureTime < :end "
             + "AND si.cabinClass = :cabin "
-            + "AND (si.totalSeats - si.bookedSeats) > :passengers "
+            + "AND (si.totalSeats - si.bookedSeats) >= :passengers "
             + "ORDER BY f.departureTime")
     List<Flight> searchAvailable(@Param("origin") String origin,
                                  @Param("destination") String destination,

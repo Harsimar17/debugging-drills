@@ -13,17 +13,17 @@ import java.util.Map;
 @Component
 public class FareCache {
 
-    private final Map<Long, FareQuote> quotesByFlight = new HashMap<>();
+    private final Map<String, FareQuote> quotesByFlight = new HashMap<>();
 
-    public FareQuote get(Long flightId) {
-        return quotesByFlight.get(flightId);
+    public FareQuote get(String flightCacheKey) {
+        return quotesByFlight.get(flightCacheKey.toString());
     }
 
-    public void put(Long flightId, FareQuote quote) {
-        quotesByFlight.put(flightId, quote);
+    public void put(String flightCacheKey, FareQuote quote) {
+        quotesByFlight.put(flightCacheKey.toString(), quote);
     }
 
-    public void evict(Long flightId) {
-        quotesByFlight.remove(flightId);
+    public void evict(String flightCacheKey) {
+        quotesByFlight.remove(flightCacheKey.toString());
     }
 }
